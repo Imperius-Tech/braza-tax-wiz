@@ -9,18 +9,23 @@ interface AnalysisProgressProps {
 const steps = [
   {
     icon: FileSearch,
-    title: "Extraindo dados dos documentos",
+    title: "Extraindo dados da empresa",
     description: "Lendo e interpretando as informações financeiras...",
   },
   {
     icon: Calculator,
-    title: "Analisando estratégias tributárias",
-    description: "Cruzando dados com a legislação brasileira...",
+    title: "Identificando estratégias tributárias",
+    description: "Cruzando dados com a legislação e 25 estratégias práticas...",
   },
   {
     icon: FileBarChart,
-    title: "Preparando seu relatório",
-    description: "Formatando o resultado com valores de economia...",
+    title: "Formatando o relatório",
+    description: "Organizando estratégias, calculando economia e glossário...",
+  },
+  {
+    icon: FileBarChart,
+    title: "Criando plano de implementação",
+    description: "Montando passo a passo para o contador executar...",
   },
 ];
 
@@ -46,11 +51,13 @@ const AnalysisProgress = ({ currentStep }: AnalysisProgressProps) => {
 
   // Simular progressão visual dos steps
   useEffect(() => {
-    const t1 = setTimeout(() => setSimulatedStep(1), 3000);
-    const t2 = setTimeout(() => setSimulatedStep(2), 12000);
+    const t1 = setTimeout(() => setSimulatedStep(1), 5000);
+    const t2 = setTimeout(() => setSimulatedStep(2), 25000);
+    const t3 = setTimeout(() => setSimulatedStep(3), 45000);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
     };
   }, []);
 

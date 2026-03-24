@@ -39,6 +39,46 @@ export interface ImpactoReforma {
   urgencia: "ALTA" | "MEDIA" | "BAIXA";
 }
 
+export interface GlossarioItem {
+  termo: string;
+  definicao: string;
+}
+
+export interface FaseImplementacao {
+  fase: number;
+  titulo: string;
+  duracao: string;
+  tarefas: string[];
+  mensagem_cliente: string;
+  dica_relacionamento: string;
+}
+
+export interface PlanoEstrategia {
+  estrategia: string;
+  economia_estimada_anual: number;
+  duracao_total: string;
+  fases: FaseImplementacao[];
+}
+
+export interface ObjecaoResposta {
+  objecao: string;
+  resposta: string;
+}
+
+export interface ProtocoloFeedback {
+  frequencia: string;
+  canais: string[];
+  modelo_relatorio_mensal: string;
+  indicadores_acompanhamento: string[];
+}
+
+export interface EstrategiaRelacionamento {
+  primeiro_contato: string;
+  objecoes_comuns: ObjecaoResposta[];
+  upsell: string;
+  retencao: string;
+}
+
 export interface AnaliseResultado {
   resumo_executivo: string;
   frase_destaque: string;
@@ -54,7 +94,11 @@ export interface AnaliseResultado {
     estado: string;
   };
   estrategias: Estrategia[];
+  glossario: GlossarioItem[] | null;
   impacto_reforma_tributaria: ImpactoReforma | null;
+  plano_implementacao: PlanoEstrategia[] | null;
+  protocolo_feedback: ProtocoloFeedback | null;
+  estrategia_relacionamento: EstrategiaRelacionamento | null;
   disclaimer: string;
   cta: {
     texto: string;

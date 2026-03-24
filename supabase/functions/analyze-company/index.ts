@@ -3,6 +3,7 @@ import { chatCompletion } from "../_shared/openai.ts";
 import { EXTRACTOR_SYSTEM_PROMPT } from "../_shared/prompts/extractor.ts";
 import { STRATEGIST_SYSTEM_PROMPT } from "../_shared/prompts/strategist.ts";
 import { FORMATTER_SYSTEM_PROMPT } from "../_shared/prompts/formatter.ts";
+import { IMPLEMENTER_SYSTEM_PROMPT } from "../_shared/prompts/implementer.ts";
 import { LEGISLACAO_TRIBUTARIA } from "../_shared/knowledge/legislacao.ts";
 import { ESTRATEGIAS_GPTHALES } from "../_shared/knowledge/estrategias.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -28,7 +29,7 @@ Deno.serve(async (req) => {
   let analiseId: string | null = null;
 
   try {
-    const { empresa, documento_base64, documento_nome } = await req.json();
+    const { empresa, documento_texto, documento_nome } = await req.json();
 
     if (!empresa || !empresa.nomeEmpresa || !empresa.regimeTributario) {
       return new Response(
@@ -37,10 +38,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Validar faturamento
+    // Validar faturamento (formato BR: R$ 120.000 ou 120000 ou 120.000,50)
     const faturamentoLimpo = empresa.faturamentoMensal
-      ?.replace(/[^\d,.-]/g, "")
-      .replace(",", ".");
+      ?.replace(/[^\d,]/g, "")  // remove tudo exceto dígitos e vírgula
+      .replace(",", ".");       // vírgula decimal → ponto decimal
     const faturamento = parseFloat(faturamentoLimpo);
     if (!faturamento || isNaN(faturamento) || faturamento <= 0) {
       return new Response(
@@ -92,12 +93,13 @@ Deno.serve(async (req) => {
     analiseId = analiseData.id;
 
     // 3. Se tem documento, salvar referência
-    if (documento_base64 && documento_nome) {
+    if (documento_texto && documento_nome) {
       const { error: docError } = await supabase.from("documentos").insert({
         analise_id: analiseId,
         nome_arquivo: documento_nome,
         tipo_arquivo: "application/pdf",
-        tamanho_bytes: Math.round((documento_base64.length * 3) / 4),
+        tamanho_bytes: new TextEncoder().encode(documento_texto).length,
+        texto_extraido: documento_texto,
       });
       if (docError) console.warn("Erro ao salvar documento:", docError.message);
     }
@@ -128,29 +130,19 @@ Dados do formulário:
 - Observações: ${empresa.observacoes || "Nenhuma"}
     `.trim();
 
-    const userContentExtractor: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+    let userMessage: string;
 
-    if (documento_base64) {
-      userContentExtractor.push({
-        type: "image_url",
-        image_url: { url: `data:application/pdf;base64,${documento_base64}` },
-      });
-      userContentExtractor.push({
-        type: "text",
-        text: `Extraia todos os dados financeiros e tributários deste documento e retorne em formato json.\n\n${dadosFormulario}`,
-      });
+    if (documento_texto) {
+      userMessage = `Extraia todos os dados financeiros e tributários do documento abaixo e retorne em formato json.\n\n=== TEXTO DO DOCUMENTO ===\n${documento_texto}\n=== FIM DO DOCUMENTO ===\n\n${dadosFormulario}`;
     } else {
-      userContentExtractor.push({
-        type: "text",
-        text: `Não há documento PDF anexo. Analise apenas os dados do formulário e faça estimativas razoáveis baseadas no setor e porte. Retorne em formato json.\n\n${dadosFormulario}`,
-      });
+      userMessage = `Não há documento PDF anexo. Analise apenas os dados do formulário e faça estimativas razoáveis baseadas no setor e porte. Retorne em formato json.\n\n${dadosFormulario}`;
     }
 
     const extractorResponse = await chatCompletion({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: EXTRACTOR_SYSTEM_PROMPT },
-        { role: "user", content: userContentExtractor },
+        { role: "user", content: userMessage },
       ],
       temperature: 0.2,
       max_tokens: 2048,
@@ -245,6 +237,52 @@ ${ESTRATEGIAS_GPTHALES}
       throw new Error("Formatador retornou JSON inválido. Tente novamente.");
     }
 
+    // ==========================================
+    // AGENTE 4 — IMPLEMENTADOR
+    // ==========================================
+    console.log("[Agente 4] Implementador iniciado...");
+    const t4 = Date.now();
+
+    const implementerResponse = await chatCompletion({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: IMPLEMENTER_SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: `Crie o plano de implementação para o contador com base nas estratégias abaixo. Retorne em formato json.\n\nEmpresa:\n${perfilEmpresa}\n\nEstratégias aprovadas:\n${estrategiasJson}`,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 4096,
+      response_format: { type: "json_object" },
+      timeout_ms: 40000,
+    });
+
+    const planoJson = implementerResponse.choices[0].message.content;
+    totalTokens += implementerResponse.usage.total_tokens;
+    console.log(`[Agente 4] Implementador concluído em ${Date.now() - t4}ms`);
+
+    // Parsear plano de implementação
+    let plano;
+    try {
+      plano = JSON.parse(planoJson);
+    } catch {
+      console.warn("Agente Implementador retornou JSON inválido, continuando sem plano.");
+      plano = null;
+    }
+
+    // Anexar plano ao resultado
+    resultado.plano_implementacao = plano?.plano_implementacao || null;
+    resultado.protocolo_feedback = plano?.protocolo_feedback || null;
+    resultado.estrategia_relacionamento = plano?.estrategia_relacionamento || null;
+
+    // Filtrar estratégias com economia 0
+    if (resultado.estrategias) {
+      resultado.estrategias = resultado.estrategias.filter(
+        (e: { economia_estimada_anual?: number }) => e.economia_estimada_anual && e.economia_estimada_anual > 0
+      );
+    }
+
     // Validar campo obrigatório
     if (!resultado.economia_total_anual && resultado.economia_total_anual !== 0) {
       console.warn("Resultado sem economia_total_anual, calculando a partir das estratégias...");
@@ -274,20 +312,7 @@ ${ESTRATEGIAS_GPTHALES}
       console.error("Erro ao atualizar análise:", updateError.message);
     }
 
-    // Se tem documento, atualizar texto extraído
-    if (documento_base64) {
-      try {
-        const perfil = JSON.parse(perfilEmpresa);
-        if (perfil.informacoes_adicionais) {
-          await supabase
-            .from("documentos")
-            .update({ texto_extraido: perfil.informacoes_adicionais })
-            .eq("analise_id", analiseId);
-        }
-      } catch (e) {
-        console.warn("Falha ao salvar texto_extraido:", e);
-      }
-    }
+    // texto_extraido já salvo no insert do documento
 
     console.log(`[TOTAL] Análise concluída em ${tempoMs}ms | ${totalTokens} tokens`);
 

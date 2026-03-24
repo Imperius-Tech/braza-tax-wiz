@@ -1,6 +1,10 @@
 import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { CompanyData, AnaliseResponse } from "@/lib/types";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 interface AnalysisState {
   step: number;
@@ -27,21 +31,25 @@ export function useAnalysis() {
     setState({ step: 1, isLoading: true, error: null, result: null });
     clearTimers();
 
-    // Simular progressão visual dos steps enquanto a API processa
+    // Simular progressão visual dos 4 steps enquanto a API processa
     timersRef.current.push(setTimeout(() => {
       setState((prev) => prev.isLoading ? { ...prev, step: 2 } : prev);
     }, 8000));
 
     timersRef.current.push(setTimeout(() => {
       setState((prev) => prev.isLoading ? { ...prev, step: 3 } : prev);
-    }, 35000));
+    }, 30000));
+
+    timersRef.current.push(setTimeout(() => {
+      setState((prev) => prev.isLoading ? { ...prev, step: 4 } : prev);
+    }, 50000));
 
     try {
-      let documento_base64: string | null = null;
+      let documento_texto: string | null = null;
       let documento_nome: string | null = null;
 
       if (file) {
-        documento_base64 = await fileToBase64(file);
+        documento_texto = await extractPdfText(file);
         documento_nome = file.name;
       }
 
@@ -50,13 +58,23 @@ export function useAnalysis() {
         {
           body: {
             empresa: data,
-            documento_base64,
+            documento_texto,
             documento_nome,
           },
         }
       );
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        // Supabase client wraps the error — try to extract the real message
+        let detail = error.message;
+        try {
+          if ("context" in error && typeof (error as any).context?.json === "function") {
+            const body = await (error as any).context.json();
+            detail = body?.details || body?.error || detail;
+          }
+        } catch { /* ignore parse errors */ }
+        throw new Error(detail);
+      }
       if (response?.error) throw new Error(response.details || response.error);
 
       clearTimers();
@@ -84,15 +102,19 @@ export function useAnalysis() {
   return { ...state, analyze, reset };
 }
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(",")[1];
-      resolve(base64);
-    };
-    reader.onerror = () => reject(new Error("Erro ao ler arquivo. Tente novamente."));
-    reader.readAsDataURL(file);
-  });
+async function extractPdfText(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const pages: string[] = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const text = content.items
+      .map((item: any) => item.str)
+      .join(" ");
+    pages.push(text);
+  }
+
+  return pages.join("\n\n");
 }

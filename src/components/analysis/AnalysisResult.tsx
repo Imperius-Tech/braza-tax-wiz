@@ -1,8 +1,19 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { RotateCcw, AlertTriangle, Calendar, ExternalLink } from "lucide-react";
+import {
+  RotateCcw,
+  AlertTriangle,
+  Calendar,
+  ExternalLink,
+  BookOpen,
+  ClipboardList,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import EconomySummary from "./EconomySummary";
 import StrategyCard from "./StrategyCard";
+import ImplementationPlan from "./ImplementationPlan";
 import type { AnaliseResultado } from "@/lib/types";
 
 interface AnalysisResultProps {
@@ -12,6 +23,12 @@ interface AnalysisResultProps {
 }
 
 const AnalysisResult = ({ resultado, tempoMs, onReset }: AnalysisResultProps) => {
+  const [showPlan, setShowPlan] = useState(false);
+  const [showGlossary, setShowGlossary] = useState(false);
+
+  const hasPlan =
+    resultado.plano_implementacao && resultado.plano_implementacao.length > 0;
+
   return (
     <div className="space-y-8">
       {/* Header com botão nova análise */}
@@ -63,6 +80,89 @@ const AnalysisResult = ({ resultado, tempoMs, onReset }: AnalysisResultProps) =>
         </div>
       </div>
 
+      {/* Botões de ação */}
+      <motion.div
+        className="flex flex-wrap gap-3"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+      >
+        {hasPlan && (
+          <Button
+            onClick={() => setShowPlan(!showPlan)}
+            className={
+              showPlan
+                ? "gradient-brand text-primary-foreground"
+                : "bg-card border border-primary/30 text-primary hover:bg-primary/10"
+            }
+          >
+            <ClipboardList className="w-4 h-4 mr-2" />
+            {showPlan ? "Ocultar Plano" : "Ver Plano de Implementação"}
+            {showPlan ? (
+              <ChevronUp className="w-4 h-4 ml-1" />
+            ) : (
+              <ChevronDown className="w-4 h-4 ml-1" />
+            )}
+          </Button>
+        )}
+
+        {resultado.glossario && resultado.glossario.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setShowGlossary(!showGlossary)}
+            className="border-border/50 text-muted-foreground hover:text-foreground"
+          >
+            <BookOpen className="w-4 h-4 mr-2" />
+            {showGlossary ? "Ocultar Glossário" : "Glossário de Termos"}
+            {showGlossary ? (
+              <ChevronUp className="w-4 h-4 ml-1" />
+            ) : (
+              <ChevronDown className="w-4 h-4 ml-1" />
+            )}
+          </Button>
+        )}
+      </motion.div>
+
+      {/* Plano de Implementação (expandível) */}
+      {showPlan && hasPlan && (
+        <ImplementationPlan
+          planos={resultado.plano_implementacao!}
+          protocolo={resultado.protocolo_feedback}
+          relacionamento={resultado.estrategia_relacionamento}
+        />
+      )}
+
+      {/* Glossário (expandível) */}
+      {showGlossary && resultado.glossario && (
+        <motion.div
+          className="bg-card border border-border/50 rounded-xl p-5"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <BookOpen className="w-5 h-5 text-primary" />
+            <h3 className="font-heading font-semibold text-foreground">
+              Glossário de Termos
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {resultado.glossario.map((item, i) => (
+              <div
+                key={i}
+                className="p-3 rounded-lg bg-secondary/50 border border-border/30"
+              >
+                <p className="text-sm font-semibold text-primary mb-1">
+                  {item.termo}
+                </p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {item.definicao}
+                </p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Impacto da Reforma Tributária */}
       {resultado.impacto_reforma_tributaria && (
         <motion.div
@@ -74,7 +174,7 @@ const AnalysisResult = ({ resultado, tempoMs, onReset }: AnalysisResultProps) =>
           <div className="flex items-center gap-2 mb-3">
             <Calendar className="w-5 h-5 text-yellow-400" />
             <h3 className="font-heading font-semibold text-foreground">
-              Impacto da Reforma Tributária (2026–2033)
+              Impacto da Reforma Tributária (2026-2033)
             </h3>
           </div>
           <p className="text-sm text-muted-foreground mb-3">
@@ -82,12 +182,17 @@ const AnalysisResult = ({ resultado, tempoMs, onReset }: AnalysisResultProps) =>
           </p>
           {resultado.impacto_reforma_tributaria.acoes_recomendadas?.length > 0 && (
             <ul className="space-y-1.5">
-              {resultado.impacto_reforma_tributaria.acoes_recomendadas.map((acao, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 shrink-0 mt-0.5" />
-                  {acao}
-                </li>
-              ))}
+              {resultado.impacto_reforma_tributaria.acoes_recomendadas.map(
+                (acao, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 text-sm text-muted-foreground"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 shrink-0 mt-0.5" />
+                    {acao}
+                  </li>
+                )
+              )}
             </ul>
           )}
         </motion.div>
@@ -100,9 +205,7 @@ const AnalysisResult = ({ resultado, tempoMs, onReset }: AnalysisResultProps) =>
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
       >
-        <p className="text-xs text-muted-foreground">
-          {resultado.disclaimer}
-        </p>
+        <p className="text-xs text-muted-foreground">{resultado.disclaimer}</p>
 
         {resultado.cta && (
           <div className="bg-primary/5 border border-primary/20 rounded-xl p-5">
@@ -112,7 +215,11 @@ const AnalysisResult = ({ resultado, tempoMs, onReset }: AnalysisResultProps) =>
               className="gradient-brand text-primary-foreground font-semibold hover:opacity-90"
             >
               {resultado.cta.link ? (
-                <a href={resultado.cta.link} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={resultado.cta.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Agendar Sessão Estratégica
                 </a>

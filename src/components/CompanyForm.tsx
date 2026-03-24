@@ -54,6 +54,16 @@ const CompanyForm = ({ onSubmit, isLoading }: CompanyFormProps) => {
   const update = (field: keyof CompanyData, value: string | boolean) =>
     setData((prev) => ({ ...prev, [field]: value }));
 
+  const formatCurrency = (raw: string): string => {
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) return "";
+    return "R$ " + Number(digits).toLocaleString("pt-BR");
+  };
+
+  const updateCurrency = (field: keyof CompanyData, raw: string) => {
+    update(field, formatCurrency(raw));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(data, file);
@@ -222,9 +232,9 @@ const CompanyForm = ({ onSubmit, isLoading }: CompanyFormProps) => {
               Faturamento Mensal (R$) *
             </Label>
             <Input
-              placeholder="Ex: 120000"
+              placeholder="Ex: R$ 120.000"
               value={data.faturamentoMensal}
-              onChange={(e) => update("faturamentoMensal", e.target.value)}
+              onChange={(e) => updateCurrency("faturamentoMensal", e.target.value)}
               className="bg-secondary border-border/50 focus:border-primary"
               required
             />
@@ -235,9 +245,9 @@ const CompanyForm = ({ onSubmit, isLoading }: CompanyFormProps) => {
               Folha de Pagamento Mensal (R$)
             </Label>
             <Input
-              placeholder="Ex: 25000 (salários + encargos)"
+              placeholder="Ex: R$ 25.000"
               value={data.folhaPagamentoMensal}
-              onChange={(e) => update("folhaPagamentoMensal", e.target.value)}
+              onChange={(e) => updateCurrency("folhaPagamentoMensal", e.target.value)}
               className="bg-secondary border-border/50 focus:border-primary"
             />
           </motion.div>
@@ -247,9 +257,9 @@ const CompanyForm = ({ onSubmit, isLoading }: CompanyFormProps) => {
               Pró-labore Total dos Sócios (R$)
             </Label>
             <Input
-              placeholder="Ex: 8000"
+              placeholder="Ex: R$ 8.000"
               value={data.proLabore}
-              onChange={(e) => update("proLabore", e.target.value)}
+              onChange={(e) => updateCurrency("proLabore", e.target.value)}
               className="bg-secondary border-border/50 focus:border-primary"
             />
           </motion.div>
