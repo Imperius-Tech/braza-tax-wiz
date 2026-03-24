@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   FileBarChart,
@@ -29,6 +29,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import FileUpload from "@/components/upload/FileUpload";
+import ConsultationHistory from "@/components/ConsultationHistory";
+import { useConsultationCache, useFormDraft } from "@/hooks/useConsultationCache";
 
 const formatCurrency = (raw: string): string => {
   const digits = raw.replace(/\D/g, "");
@@ -42,11 +44,7 @@ const steps = [
   { label: "Gerando analise e recomendacoes" },
 ];
 
-const GestaoFinanceira = () => {
-  const { step, isLoading, error, result, analyze, reset } = useModuleAnalysis("financeiro");
-  const { toast } = useToast();
-  const [file, setFile] = useState<File | null>(null);
-  const [form, setForm] = useState({
+const defaultFinForm = {
     nomeEmpresa: "",
     cnpj: "",
     periodo: "",
@@ -60,7 +58,23 @@ const GestaoFinanceira = () => {
     impostosSobreVendas: "",
     outrasReceitas: "",
     observacoes: "",
+  };
+
+const GestaoFinanceira = () => {
+  const { step, isLoading, error, result, analyze, reset } = useModuleAnalysis("financeiro");
+  const { history, save, remove } = useConsultationCache("financeiro");
+  const { loadDraft, saveDraft, clearDraft } = useFormDraft("financeiro");
+  const { toast } = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft();
+    return draft ? { ...defaultFinForm, ...draft } : { ...defaultFinForm };
   });
+
+  useEffect(() => {
+    const timer = setTimeout(() => saveDraft(form), 500);
+    return () => clearTimeout(timer);
+  }, [form]);
 
   const update = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -70,14 +84,22 @@ const GestaoFinanceira = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await analyze(form, file);
+      const res = await analyze(form, file);
+      save(form.nomeEmpresa || "Analise Financeira", form, res?.resultado ?? null);
+      clearDraft();
     } catch (err) {
+      save(form.nomeEmpresa || "Financeiro (erro)", form, null);
       toast({
         title: "Erro na analise financeira",
         description: err instanceof Error ? err.message : "Tente novamente.",
         variant: "destructive",
       });
     }
+  };
+
+  const handleSelectHistory = (c: any) => {
+    setForm({ ...defaultFinForm, ...c.dados });
+    reset();
   };
 
   const isValid = form.nomeEmpresa && form.receitaBruta && form.periodo;
@@ -102,6 +124,8 @@ const GestaoFinanceira = () => {
                 Gere a DRE da empresa, analise indicadores e receba recomendacoes para melhorar os resultados.
               </p>
             </motion.div>
+
+            <ConsultationHistory history={history} onSelect={handleSelectHistory} onRemove={remove} />
 
             <motion.div
               className="bg-card border border-border/50 rounded-2xl p-5 md:p-8 shadow-card"

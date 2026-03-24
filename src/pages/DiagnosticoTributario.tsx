@@ -1,10 +1,13 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Bot, TrendingDown, Shield, Zap } from "lucide-react";
 import Header from "@/components/Header";
 import CompanyForm from "@/components/CompanyForm";
+import ConsultationHistory from "@/components/ConsultationHistory";
 import AnalysisProgress from "@/components/analysis/AnalysisProgress";
 import AnalysisResult from "@/components/analysis/AnalysisResult";
 import { useAnalysis } from "@/hooks/useAnalysis";
+import { useConsultationCache, useFormDraft } from "@/hooks/useConsultationCache";
 import { useToast } from "@/hooks/use-toast";
 import type { CompanyData } from "@/lib/types";
 
@@ -16,18 +19,44 @@ const features = [
 
 const DiagnosticoTributario = () => {
   const { step, isLoading, error, result, analyze, reset } = useAnalysis();
+  const { history, save, remove } = useConsultationCache("diagnostico");
+  const { loadDraft, saveDraft, clearDraft } = useFormDraft("diagnostico");
   const { toast } = useToast();
+  const [initialData, setInitialData] = useState<Partial<CompanyData> | null>(null);
+  const [formKey, setFormKey] = useState(0);
+
+  // Load draft on mount
+  useEffect(() => {
+    const draft = loadDraft();
+    if (draft) setInitialData(draft as Partial<CompanyData>);
+  }, []);
 
   const handleSubmit = async (data: CompanyData, file: File | null) => {
+    saveDraft(data);
     try {
-      await analyze(data, file);
+      const res = await analyze(data, file);
+      // Save to history with result
+      save(
+        data.nomeEmpresa || "Consulta sem nome",
+        data as unknown as Record<string, any>,
+        res?.resultado as unknown as Record<string, any> ?? null,
+      );
+      clearDraft();
     } catch (err) {
+      // Save draft even on error
+      save(data.nomeEmpresa || "Consulta (erro)", data as unknown as Record<string, any>, null);
       toast({
         title: "Erro na analise",
         description: err instanceof Error ? err.message : "Tente novamente em instantes.",
         variant: "destructive",
       });
     }
+  };
+
+  const handleSelectHistory = (consultation: any) => {
+    setInitialData(consultation.dados);
+    setFormKey((k) => k + 1); // Force re-render CompanyForm with new initial data
+    reset();
   };
 
   const showForm = !isLoading && !result;
@@ -69,13 +98,25 @@ const DiagnosticoTributario = () => {
               </div>
             </motion.div>
 
+            {/* Historico de consultas */}
+            <ConsultationHistory
+              history={history}
+              onSelect={handleSelectHistory}
+              onRemove={remove}
+            />
+
             <motion.div
               className="bg-card border border-border/50 rounded-2xl p-5 md:p-8 shadow-card"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.5 }}
             >
-              <CompanyForm onSubmit={handleSubmit} isLoading={isLoading} />
+              <CompanyForm
+                key={formKey}
+                onSubmit={handleSubmit}
+                isLoading={isLoading}
+                initialData={initialData}
+              />
             </motion.div>
 
             {error && (

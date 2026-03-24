@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   CalendarCheck,
@@ -30,6 +30,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import ConsultationHistory from "@/components/ConsultationHistory";
+import { useConsultationCache, useFormDraft } from "@/hooks/useConsultationCache";
 
 const steps = [
   { label: "Analisando perfil fiscal da empresa" },
@@ -37,24 +39,35 @@ const steps = [
   { label: "Gerando diagnostico de conformidade" },
 ];
 
+const defaultFiscalForm = {
+  nomeEmpresa: "",
+  cnpj: "",
+  regimeTributario: "",
+  setor: "",
+  estado: "",
+  municipio: "",
+  temInscricaoEstadual: false,
+  temFuncionarios: false,
+  numFuncionarios: "",
+  cnaesPrincipais: "",
+  faturamentoMensal: "",
+  observacoes: "",
+};
+
 const GestaoFiscal = () => {
   const { step, isLoading, error, result, analyze, reset } = useModuleAnalysis("fiscal");
+  const { history, save, remove } = useConsultationCache("fiscal");
+  const { loadDraft, saveDraft, clearDraft } = useFormDraft("fiscal");
   const { toast } = useToast();
-
-  const [form, setForm] = useState({
-    nomeEmpresa: "",
-    cnpj: "",
-    regimeTributario: "",
-    setor: "",
-    estado: "",
-    municipio: "",
-    temInscricaoEstadual: false,
-    temFuncionarios: false,
-    numFuncionarios: "",
-    cnaesPrincipais: "",
-    faturamentoMensal: "",
-    observacoes: "",
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft();
+    return draft ? { ...defaultFiscalForm, ...draft } : { ...defaultFiscalForm };
   });
+
+  useEffect(() => {
+    const timer = setTimeout(() => saveDraft(form), 500);
+    return () => clearTimeout(timer);
+  }, [form]);
 
   const update = (field: string, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -62,14 +75,22 @@ const GestaoFiscal = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await analyze(form);
+      const res = await analyze(form);
+      save(form.nomeEmpresa || "Diagnostico Fiscal", form, res?.resultado ?? null);
+      clearDraft();
     } catch (err) {
+      save(form.nomeEmpresa || "Fiscal (erro)", form, null);
       toast({
         title: "Erro na analise",
         description: err instanceof Error ? err.message : "Tente novamente.",
         variant: "destructive",
       });
     }
+  };
+
+  const handleSelectHistory = (c: any) => {
+    setForm({ ...defaultFiscalForm, ...c.dados });
+    reset();
   };
 
   const isValid = form.nomeEmpresa && form.regimeTributario && form.estado;
@@ -94,6 +115,8 @@ const GestaoFiscal = () => {
                 Calendario de obrigacoes, diagnostico de conformidade e alertas de prazos personalizados.
               </p>
             </motion.div>
+
+            <ConsultationHistory history={history} onSelect={handleSelectHistory} onRemove={remove} />
 
             <motion.div className="bg-card border border-border/50 rounded-2xl p-5 md:p-8 shadow-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
               <form onSubmit={handleSubmit} className="space-y-8">

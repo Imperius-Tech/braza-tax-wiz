@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import EconomySummary from "./EconomySummary";
 import StrategyCard from "./StrategyCard";
 import ImplementationPlan from "./ImplementationPlan";
+import StrategyChat from "@/components/StrategyChat";
 import type { AnaliseResultado } from "@/lib/types";
 
 interface AnalysisResultProps {
@@ -162,6 +163,21 @@ const AnalysisResult = ({ resultado, tempoMs, onReset }: AnalysisResultProps) =>
           </div>
         </motion.div>
       )}
+
+      {/* Chat Comparativo de Estrategia */}
+      <StrategyChat
+        empresaContext={JSON.stringify({
+          razao_social: resultado.empresa.razao_social,
+          regime_tributario: resultado.empresa.regime_tributario,
+          faturamento_mensal: resultado.empresa.faturamento_mensal,
+          setor: resultado.empresa.setor,
+          estado: resultado.empresa.estado,
+          municipio: resultado.empresa.municipio,
+        })}
+        resultadoContext={resultado.estrategias
+          .map((e) => `- ${e.titulo}: economia R$ ${e.economia_estimada_anual}/ano`)
+          .join("\n")}
+      />
 
       {/* Impacto da Reforma Tributária */}
       {resultado.impacto_reforma_tributaria && (

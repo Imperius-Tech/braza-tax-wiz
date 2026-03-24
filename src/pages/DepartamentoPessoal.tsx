@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Users,
@@ -28,6 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import ConsultationHistory from "@/components/ConsultationHistory";
+import { useConsultationCache, useFormDraft } from "@/hooks/useConsultationCache";
 
 const formatCurrency = (raw: string): string => {
   const digits = raw.replace(/\D/g, "");
@@ -50,11 +52,7 @@ const operacoes = [
   { value: "folha", label: "Simulacao de Folha de Pagamento" },
 ];
 
-const DepartamentoPessoal = () => {
-  const { step, isLoading, error, result, analyze, reset } = useModuleAnalysis("departamento_pessoal");
-  const { toast } = useToast();
-
-  const [form, setForm] = useState({
+const defaultDPForm = {
     operacao: "",
     nomeEmpresa: "",
     regimeTributario: "",
@@ -71,7 +69,22 @@ const DepartamentoPessoal = () => {
     valeRefeicao: "",
     planoSaude: "",
     observacoes: "",
+  };
+
+const DepartamentoPessoal = () => {
+  const { step, isLoading, error, result, analyze, reset } = useModuleAnalysis("departamento_pessoal");
+  const { history, save, remove } = useConsultationCache("departamento_pessoal");
+  const { loadDraft, saveDraft, clearDraft } = useFormDraft("departamento_pessoal");
+  const { toast } = useToast();
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft();
+    return draft ? { ...defaultDPForm, ...draft } : { ...defaultDPForm };
   });
+
+  useEffect(() => {
+    const timer = setTimeout(() => saveDraft(form), 500);
+    return () => clearTimeout(timer);
+  }, [form]);
 
   const update = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -81,14 +94,22 @@ const DepartamentoPessoal = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await analyze(form);
+      const res = await analyze(form);
+      save(form.nomeFuncionario || form.operacao || "Calculo DP", form, res?.resultado ?? null);
+      clearDraft();
     } catch (err) {
+      save(form.nomeFuncionario || "DP (erro)", form, null);
       toast({
         title: "Erro no calculo",
         description: err instanceof Error ? err.message : "Tente novamente.",
         variant: "destructive",
       });
     }
+  };
+
+  const handleSelectHistory = (c: any) => {
+    setForm({ ...defaultDPForm, ...c.dados });
+    reset();
   };
 
   const isValid = form.operacao && form.salarioBase;
@@ -113,6 +134,8 @@ const DepartamentoPessoal = () => {
                 Calcule rescisao, ferias, 13o salario, custo de funcionario e gere documentos automaticamente.
               </p>
             </motion.div>
+
+            <ConsultationHistory history={history} onSelect={handleSelectHistory} onRemove={remove} />
 
             <motion.div className="bg-card border border-border/50 rounded-2xl p-5 md:p-8 shadow-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
               <form onSubmit={handleSubmit} className="space-y-8">

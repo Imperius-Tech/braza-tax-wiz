@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Building,
@@ -17,7 +17,10 @@ import {
 } from "lucide-react";
 import Header from "@/components/Header";
 import ModuleProgress from "@/components/ModuleProgress";
+import Roadmap from "@/components/Roadmap";
+import ConsultationHistory from "@/components/ConsultationHistory";
 import { useModuleAnalysis } from "@/hooks/useModuleAnalysis";
+import { useConsultationCache, useFormDraft } from "@/hooks/useConsultationCache";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,11 +46,7 @@ const steps = [
   { label: "Gerando checklist e contrato social" },
 ];
 
-const AberturaEmpresa = () => {
-  const { step, isLoading, error, result, analyze, reset } = useModuleAnalysis("abertura_empresa");
-  const { toast } = useToast();
-
-  const [form, setForm] = useState({
+const defaultForm = {
     descricaoAtividade: "",
     tipoNegocio: "",
     nomeDesejado: "",
@@ -60,7 +59,22 @@ const AberturaEmpresa = () => {
     endereco: "",
     vendeOuPresta: "",
     observacoes: "",
+  };
+
+const AberturaEmpresa = () => {
+  const { step, isLoading, error, result, analyze, reset } = useModuleAnalysis("abertura_empresa");
+  const { history, save, remove } = useConsultationCache("abertura_empresa");
+  const { loadDraft, saveDraft, clearDraft } = useFormDraft("abertura_empresa");
+  const { toast } = useToast();
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft();
+    return draft ? { ...defaultForm, ...draft } : { ...defaultForm };
   });
+
+  useEffect(() => {
+    const timer = setTimeout(() => saveDraft(form), 500);
+    return () => clearTimeout(timer);
+  }, [form]);
 
   const update = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -70,14 +84,22 @@ const AberturaEmpresa = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await analyze(form);
+      const res = await analyze(form);
+      save(form.nomeDesejado || form.descricaoAtividade.slice(0, 30) || "Abertura", form, res?.resultado ?? null);
+      clearDraft();
     } catch (err) {
+      save(form.nomeDesejado || "Abertura (erro)", form, null);
       toast({
         title: "Erro na analise",
         description: err instanceof Error ? err.message : "Tente novamente.",
         variant: "destructive",
       });
     }
+  };
+
+  const handleSelectHistory = (c: any) => {
+    setForm({ ...defaultForm, ...c.dados });
+    reset();
   };
 
   const isValid = form.descricaoAtividade && form.estado;
@@ -102,6 +124,8 @@ const AberturaEmpresa = () => {
                 Descreva o negocio e receba: CNAE ideal, melhor regime tributario, contrato social e checklist completo.
               </p>
             </motion.div>
+
+            <ConsultationHistory history={history} onSelect={handleSelectHistory} onRemove={remove} />
 
             <motion.div className="bg-card border border-border/50 rounded-2xl p-5 md:p-8 shadow-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
               <form onSubmit={handleSubmit} className="space-y-8">
@@ -301,29 +325,18 @@ function AberturaResult({ resultado, tempoMs, onReset }: { resultado: Record<str
         )}
       </div>
 
-      {/* Checklist */}
-      <div className="bg-card border border-border/50 rounded-2xl overflow-hidden">
-        <button onClick={() => toggle("checklist")} className="w-full flex items-center justify-between p-5 hover:bg-secondary/30 transition-colors">
-          <h3 className="font-heading font-semibold text-foreground flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-blue-400" /> Checklist de Abertura ({checklist.length} etapas)
-          </h3>
-          {expandedSection === "checklist" ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-        </button>
-        {expandedSection === "checklist" && (
-          <div className="px-5 pb-5 space-y-3">
-            {checklist.map((item: any, i: number) => (
-              <div key={i} className="flex items-start gap-3">
-                <span className="w-6 h-6 rounded-full bg-blue-400/15 text-blue-400 text-xs flex items-center justify-center shrink-0 mt-0.5 font-medium">{i + 1}</span>
-                <div>
-                  <p className="text-sm font-medium text-foreground">{item.etapa}</p>
-                  {item.detalhes && <p className="text-xs text-muted-foreground mt-0.5">{item.detalhes}</p>}
-                  {item.prazo && <p className="text-xs text-primary mt-0.5">Prazo estimado: {item.prazo}</p>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Roadmap de Abertura */}
+      {checklist.length > 0 && (
+        <Roadmap
+          title={`Roadmap de Abertura (${checklist.length} etapas)`}
+          steps={checklist.map((item: any) => ({
+            etapa: item.etapa,
+            detalhes: item.detalhes,
+            prazo: item.prazo,
+          }))}
+          prazoTotal={resultado.prazo_total || undefined}
+        />
+      )}
 
       {/* Custos */}
       {custos.length > 0 && (

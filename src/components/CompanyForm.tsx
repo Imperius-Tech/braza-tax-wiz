@@ -26,29 +26,35 @@ import { Switch } from "@/components/ui/switch";
 import FileUpload from "@/components/upload/FileUpload";
 import type { CompanyData } from "@/lib/types";
 
+const emptyForm: CompanyData = {
+  nomeEmpresa: "",
+  cnpj: "",
+  regimeTributario: "",
+  faturamentoMensal: "",
+  setor: "",
+  numFuncionarios: "",
+  estado: "",
+  municipio: "",
+  atividadePrincipal: "",
+  folhaPagamentoMensal: "",
+  proLabore: "",
+  numSocios: "",
+  exportaServicos: false,
+  percentualExportacao: "",
+  observacoes: "",
+};
+
 interface CompanyFormProps {
   onSubmit: (data: CompanyData, file: File | null) => void;
   isLoading: boolean;
+  initialData?: Partial<CompanyData> | null;
 }
 
-const CompanyForm = ({ onSubmit, isLoading }: CompanyFormProps) => {
-  const [data, setData] = useState<CompanyData>({
-    nomeEmpresa: "",
-    cnpj: "",
-    regimeTributario: "",
-    faturamentoMensal: "",
-    setor: "",
-    numFuncionarios: "",
-    estado: "",
-    municipio: "",
-    atividadePrincipal: "",
-    folhaPagamentoMensal: "",
-    proLabore: "",
-    numSocios: "",
-    exportaServicos: false,
-    percentualExportacao: "",
-    observacoes: "",
-  });
+const CompanyForm = ({ onSubmit, isLoading, initialData }: CompanyFormProps) => {
+  const [data, setData] = useState<CompanyData>(() => ({
+    ...emptyForm,
+    ...(initialData || {}),
+  }));
   const [file, setFile] = useState<File | null>(null);
 
   const update = (field: keyof CompanyData, value: string | boolean) =>
